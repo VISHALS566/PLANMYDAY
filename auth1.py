@@ -25,10 +25,12 @@ SCOPES = [
 
 
 def get_calendar_service(authorization_response=None):
+    my_redirect_uri = os.environ.get('REDIRECT_URI', 'http://127.0.0.1:5000/oauth2callback')
+
     flow = Flow.from_client_secrets_file(
         CLIENT_SECRETS_FILE,
         scopes=SCOPES,
-        redirect_uri='http://127.0.0.1:5000/oauth2callback'
+        redirect_uri=my_redirect_uri 
     )
 
     if authorization_response:
