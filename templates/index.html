@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Day Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        
+        .chat-bubble {
+            max-width: 80%;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen overflow-hidden font-sans">
+
+    <script>
+        const isLoggedIn = {{ 'true' if logged_in else 'false' }};
+    </script>
+
+    <div class="flex h-full">
+
+        <div class="w-1/4 bg-white border-r border-gray-200 flex flex-col hidden md:flex">
+            <div class="p-6 border-b border-gray-200 bg-gray-50">
+                <h1 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fa-solid fa-calendar-check text-blue-600"></i> PlanMyDay
+                </h1>
+                <p class="text-xs text-gray-500 mt-1">AI Powered Scheduler</p>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-4">
+    <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Task History</h3>
+    
+    <ul id="history-list" class="space-y-3">
+        {% if history %}
+            {% for item in history %}
+            <li class="text-sm text-gray-600 p-2 hover:bg-blue-50 rounded cursor-pointer border-l-2 border-transparent hover:border-blue-500 truncate">
+                {{ item }}
+            </li>
+            {% endfor %}
+        {% else %}
+            <li class="text-xs text-gray-400 italic p-2">No history found.</li>
+        {% endif %}
+    </ul>
+</div>
+
+            <div class="p-4 border-t border-gray-200 bg-gray-50">
+    {% if logged_in %}
+        <div class="flex items-center justify-between group">
+            <div class="flex items-center gap-3 overflow-hidden">
+                {% if user_picture %}
+                    <img src="{{ user_picture }}" alt="Profile" class="w-10 h-10 rounded-full border-2 border-white shadow-sm">
+                {% else %}
+                    <div class="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+                        {{ user_name[0] | upper }}
+                    </div>
+                {% endif %}
+                
+                <div class="flex flex-col min-w-0">
+                    <span class="text-sm font-bold text-gray-700 truncate max-w-[120px]" title="{{ user_name }}">{{ user_name }}</span>
+                    <span class="text-xs text-green-600 flex items-center gap-1">
+                        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Online
+                    </span>
+                </div>
+            </div>
+            
+            <a href="/logout" class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-gray-200" title="Logout">
+                <i class="fa-solid fa-right-from-bracket"></i>
+            </a>
+        </div>
+    {% else %}
+        <a href="/login" class="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg shadow-sm transition flex items-center justify-center gap-2 text-sm">
+            <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="Google">
+            Sign in with Google
+        </a>
+    {% endif %}
+</div>
+        </div>
+
+        <div class="flex-1 flex flex-col relative">
+            
+            <div class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm">
+                <h2 class="text-lg font-semibold text-gray-700" id="header-title">
+                    {% if logged_in %} Scheduling Assistant {% else %} My To-Do List {% endif %}
+                </h2>
+                <div id="toast-container" class="fixed top-5 right-5 z-50"></div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6 bg-gray-50 relative" id="main-container">
+                
+                {% if not logged_in %}
+<div id="guest-view" class="max-w-5xl mx-auto mt-8 flex flex-col md:flex-row gap-8 h-[80vh]">
+    
+    <div class="md:w-1/3 flex flex-col justify-center space-y-6">
+        <div>
+            <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 mb-2">
+                Plan Your Day.
+            </h1>
+            <p class="text-gray-500 text-lg">
+                Type your tasks naturally. We'll organize them. <br>
+                <span class="text-xs font-semibold text-blue-500 uppercase tracking-wide">Try: "Meeting at 10am"</span>
+            </p>
+        </div>
+
+        <div class="relative group">
+            <div class="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+            <div class="relative bg-white rounded-xl shadow-xl p-2 flex items-center">
+                <input type="text" id="smart-input" placeholder="e.g., Gym at 6pm..." 
+                    class="w-full bg-transparent border-none focus:ring-0 text-gray-700 text-lg px-4 placeholder-gray-400"
+                    onkeypress="handleGuestEnter(event)">
+                <button onclick="addSmartTask()" class="bg-gray-900 text-white p-3 rounded-lg hover:bg-gray-800 transition transform active:scale-95">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center justify-between">
+            <div class="text-sm text-blue-800">
+                <i class="fa-solid fa-cloud-arrow-up mr-2"></i> 
+                Want to save this to Google Calendar?
+            </div>
+            <a href="/login" class="text-xs font-bold bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition">
+                Login
+            </a>
+        </div>
+    </div>
+
+    <div class="md:w-2/3 bg-white/80 backdrop-blur-lg border border-white/20 rounded-3xl shadow-2xl p-6 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-64 h-64 bg-purple-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-64 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob animation-delay-2000"></div>
+        
+        <h3 class="relative text-gray-800 font-bold mb-6 flex items-center gap-2">
+            <i class="fa-regular fa-clock"></i> Your Timeline
+        </h3>
+
+        <div class="relative h-full overflow-y-auto pr-2 custom-scrollbar">
+            <div class="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+            
+            <ul id="timeline-list" class="space-y-6 relative pb-20">
+                </ul>
+            
+            <div id="empty-state" class="flex flex-col items-center justify-center h-64 text-gray-400">
+                <i class="fa-solid fa-list-check text-4xl mb-3 opacity-20"></i>
+                <p>No tasks yet. Start typing!</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+                {% if logged_in %}
+                <div id="chat-view" class="flex flex-col h-full max-w-4xl mx-auto">
+                    <div id="chat-messages" class="flex-1 overflow-y-auto mb-4 space-y-4 p-4">
+                        <div class="flex justify-start">
+                            <div class="chat-bubble bg-white border border-gray-200 text-gray-700 p-4 rounded-lg rounded-tl-none shadow-sm">
+                                Hello! Tell me about your day, and I'll schedule it on your Google Calendar. <br>
+                                <em>Ex: "I have a meeting with Bob at 10am, lunch at 1pm, and yoga at 6pm."</em>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if logged_in %}
+            <div class="bg-white border-t border-gray-200 p-4">
+                <div class="max-w-4xl mx-auto relative">
+                    <textarea id="chat-input" rows="2" placeholder="Describe your schedule..." 
+                        class="w-full bg-gray-100 border-0 rounded-xl px-4 py-3 pr-16 focus:ring-2 focus:ring-blue-500 focus:bg-white transition resize-none"></textarea>
+                    
+                    <button onclick="sendMessage()" id="send-btn" 
+                        class="absolute right-2 top-2 bottom-2 bg-blue-600 text-white w-12 h-10 my-auto rounded-lg hover:bg-blue-700 transition flex items-center justify-center">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+
+    <script>
+        function showToast(message, type='success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const color = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+            toast.className = `${color} text-white px-6 py-3 rounded-lg shadow-lg mb-3 transition transform translate-x-full`;
+            toast.innerText = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => toast.classList.remove('translate-x-full'), 100);
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- GUEST MODE: SMART TIMELINE LOGIC ---
+if (!isLoggedIn) {
+    
+    // 1. Regex to find time (e.g., 9am, 10:30 PM, 14:00)
+    const timeRegex = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i;
+
+    function parseTime(text) {
+        const match = text.match(timeRegex);
+        if (!match) return 9999; // No time = End of list (or top)
+
+        let hours = parseInt(match[1]);
+        let minutes = match[2] ? parseInt(match[2]) : 0;
+        const period = match[3] ? match[3].toLowerCase() : null;
+
+        // Convert to 24hr for sorting
+        if (period === 'pm' && hours !== 12) hours += 12;
+        if (period === 'am' && hours === 12) hours = 0;
+        
+        return hours * 60 + minutes; // Return total minutes for sorting
+    }
+
+    function renderTimeline() {
+        const tasks = JSON.parse(localStorage.getItem('smartTasks')) || [];
+        const list = document.getElementById('timeline-list');
+        const emptyState = document.getElementById('empty-state');
+
+        list.innerHTML = '';
+        
+        if (tasks.length === 0) {
+            emptyState.style.display = 'flex';
+        } else {
+            emptyState.style.display = 'none';
+            
+            // Sort tasks by time
+            tasks.sort((a, b) => a.sortTime - b.sortTime);
+
+            tasks.forEach((task, index) => {
+                // Determine color based on time (Morning=Yellow/Green, Afternoon=Blue, Night=Purple)
+                let dotColor = 'bg-gray-400';
+                if (task.sortTime < 720) dotColor = 'bg-yellow-400'; // AM
+                else if (task.sortTime < 1020) dotColor = 'bg-blue-400'; // PM
+                else if (task.sortTime < 9999) dotColor = 'bg-purple-500'; // Night
+
+                const li = document.createElement('li');
+                li.className = 'relative pl-10 group animate-fade-in';
+                li.innerHTML = `
+                    <div class="absolute left-[13px] top-4 w-3 h-3 ${dotColor} rounded-full border-2 border-white shadow ring-2 ring-gray-100 z-10"></div>
+                    
+                    <div class="bg-white/60 hover:bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:shadow-md transition-all flex justify-between items-center group-hover:-translate-y-1">
+                        <div>
+                            <span class="block text-gray-800 font-medium text-lg">${task.text}</span>
+                            ${task.sortTime !== 9999 ? `<span class="text-xs font-bold text-gray-400 uppercase tracking-wider"><i class="fa-regular fa-clock"></i> Detected: ${task.timeStr}</span>` : ''}
+                        </div>
+                        <button onclick="deleteSmartTask(${index})" class="text-gray-300 hover:text-red-500 transition">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                `;
+                list.appendChild(li);
+            });
+        }
+    }
+
+    window.addSmartTask = function() {
+        const input = document.getElementById('smart-input');
+        const text = input.value.trim();
+        if (!text) return;
+
+        // Extract time string for display
+        const match = text.match(timeRegex);
+        const timeStr = match ? match[0] : '';
+        const sortTime = parseTime(text);
+
+        const tasks = JSON.parse(localStorage.getItem('smartTasks')) || [];
+        tasks.push({ text, timeStr, sortTime });
+        localStorage.setItem('smartTasks', JSON.stringify(tasks));
+        
+        input.value = '';
+        renderTimeline();
+    }
+
+    window.handleGuestEnter = function(e) {
+        if (e.key === 'Enter') addSmartTask();
+    }
+
+    window.deleteSmartTask = function(index) {
+        const tasks = JSON.parse(localStorage.getItem('smartTasks')) || [];
+        tasks.splice(index, 1); // Logic needs re-check because sorting changes index
+        // Simpler delete: Filter out by checking matching text/time or add ID. 
+        // For simple demo, we just reload data and delete by index of sorted array? 
+        // Better:
+        tasks.sort((a, b) => a.sortTime - b.sortTime); // Sort first to match view
+        tasks.splice(index, 1);
+        localStorage.setItem('smartTasks', JSON.stringify(tasks));
+        renderTimeline();
+    }
+
+    // Init
+    renderTimeline();
+}
+
+        if (isLoggedIn) {
+            const chatBox = document.getElementById('chat-messages');
+            const input = document.getElementById('chat-input');
+            const sendBtn = document.getElementById('send-btn');
+
+            const historyList = document.getElementById('history-list');
+            const mockHistory = ["Yesterday: Gym, Coding", "Mon: Team Sync"];
+            mockHistory.forEach(item => {
+                historyList.innerHTML += `<li class="text-sm text-gray-600 p-2 hover:bg-blue-50 rounded cursor-pointer border-l-2 border-transparent hover:border-blue-500">${item}</li>`;
+            });
+
+            function appendMessage(text, isUser) {
+                const div = document.createElement('div');
+                div.className = `flex ${isUser ? 'justify-end' : 'justify-start'}`;
+                
+                const bubble = document.createElement('div');
+                bubble.className = `chat-bubble p-4 rounded-lg shadow-sm ${
+                    isUser 
+                    ? 'bg-blue-600 text-white rounded-tr-none' 
+                    : 'bg-white border border-gray-200 text-gray-700 rounded-tl-none'
+                }`;
+                bubble.innerHTML = text; 
+                
+                div.appendChild(bubble);
+                chatBox.appendChild(div);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+
+            window.sendMessage = async function() {
+                const text = input.value.trim();
+                if (!text) return;
+
+                appendMessage(text, true);
+                input.value = '';
+                
+                const loadingId = 'loading-' + Date.now();
+                const loadingDiv = document.createElement('div');
+                loadingDiv.id = loadingId;
+                loadingDiv.className = 'flex justify-start';
+                loadingDiv.innerHTML = `<div class="chat-bubble bg-white border border-gray-200 p-4 rounded-lg rounded-tl-none shadow-sm"><div class="loader"></div></div>`;
+                chatBox.appendChild(loadingDiv);
+
+                try {
+                    const response = await fetch('/api/process', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: text })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    document.getElementById(loadingId).remove();
+
+                    if (data.status === 'success') {
+                        appendMessage(data.reply, false);
+                        showToast(`Scheduled ${data.events.length} events!`);
+                        
+                        const summary = text.substring(0, 20) + "...";
+                        historyList.innerHTML = `<li class="text-sm text-gray-600 p-2 bg-blue-50 rounded border-l-2 border-blue-500 animate-pulse">${summary}</li>` + historyList.innerHTML;
+                    } else {
+                        appendMessage(`Error: ${data.message}`, false);
+                        showToast("Failed to schedule", "error");
+                    }
+
+                } catch (error) {
+                    document.getElementById(loadingId).remove();
+                    appendMessage("Sorry, I couldn't reach the server.", false);
+                    showToast("Connection Error", "error");
+                }
+            }
+            
+            input.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        }
+    </script>
+    {% if logged_in %}
+<div class="fixed bottom-6 right-6 z-50 flex flex-col items-end font-sans">
+    
+    <div id="chatbot-window" class="hidden w-80 h-96 bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col mb-4 overflow-hidden transition-all duration-300 transform origin-bottom-right scale-95 opacity-0">
+        
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 flex justify-between items-center shadow-md">
+            <h3 class="text-white font-bold flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-robot"></i> Calendar Assistant
+            </h3>
+            <button onclick="toggleChat()" class="text-white hover:text-gray-200 focus:outline-none">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+
+        <div id="bot-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 text-sm">
+            <div class="flex justify-start">
+                <div class="bg-white border border-gray-200 text-gray-700 p-3 rounded-lg rounded-tl-none shadow-sm max-w-[85%]">
+                    Hi! I can check your schedule. Ask me things like "What do I have on Friday?"
+                </div>
+            </div>
+        </div>
+
+        <div class="p-3 bg-white border-t border-gray-100">
+            <div class="relative flex items-center">
+                <input type="text" id="bot-input" placeholder="Ask a question..." 
+                    class="w-full bg-gray-100 border-0 rounded-full px-4 py-2 pr-10 focus:ring-2 focus:ring-blue-500 focus:bg-white text-sm transition outline-none text-gray-700"
+                    onkeypress="handleBotKey(event)">
+                
+                <button onclick="sendBotMessage()" class="absolute right-2 text-blue-600 hover:text-blue-800 p-1 rounded-full transition-colors">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <button onclick="toggleChat()" id="chat-toggle-btn" class="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center text-2xl transition transform hover:scale-110 focus:outline-none focus:ring-4 focus:ring-blue-300">
+        <i class="fa-solid fa-comment-dots"></i>
+    </button>
+</div>
+
+<script>
+    function toggleChat() {
+        const window = document.getElementById('chatbot-window');
+        const btn = document.getElementById('chat-toggle-btn');
+        
+        if (window.classList.contains('hidden')) {
+            window.classList.remove('hidden');
+            setTimeout(() => {
+                window.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+            document.getElementById('bot-input').focus();
+        } else {
+            window.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                window.classList.add('hidden');
+            }, 300);
+        }
+    }
+
+    function handleBotKey(e) {
+        if (e.key === 'Enter') sendBotMessage();
+    }
+
+    async function sendBotMessage() {
+        const input = document.getElementById('bot-input');
+        const text = input.value.trim();
+        const msgBox = document.getElementById('bot-messages');
+        
+        if (!text) return; 
+
+        msgBox.innerHTML += `
+            <div class="flex justify-end animate-fade-in mb-2">
+                <div class="bg-blue-600 text-white p-3 rounded-lg rounded-tr-none shadow-sm max-w-[85%] text-sm">
+                    ${text}
+                </div>
+            </div>`;
+        
+        input.value = '';
+        msgBox.scrollTop = msgBox.scrollHeight;
+
+        const loadingId = 'bot-load-' + Date.now();
+        msgBox.innerHTML += `
+            <div id="${loadingId}" class="flex justify-start animate-fade-in mb-2">
+                <div class="bg-white border border-gray-200 text-gray-500 p-3 rounded-lg rounded-tl-none shadow-sm text-xs flex items-center gap-2">
+                    <i class="fa-solid fa-circle-notch fa-spin text-blue-500"></i> Checking your calendar...
+                </div>
+            </div>`;
+        msgBox.scrollTop = msgBox.scrollHeight;
+
+        try {
+            const response = await fetch('/api/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: text }) 
+            });
+            
+            const data = await response.json();
+
+            document.getElementById(loadingId).remove();
+            
+            const formattedReply = data.reply.replace(/\n/g, '<br>');
+
+            msgBox.innerHTML += `
+                <div class="flex justify-start animate-fade-in mb-2">
+                    <div class="bg-white border border-gray-200 text-gray-800 p-3 rounded-lg rounded-tl-none shadow-sm max-w-[90%] text-sm">
+                        ${formattedReply}
+                    </div>
+                </div>`;
+
+        } catch (error) {
+            document.getElementById(loadingId).remove();
+            msgBox.innerHTML += `
+                <div class="flex justify-center mb-2">
+                    <span class="text-xs text-red-500 bg-red-50 px-2 py-1 rounded">
+                        Connection failed. Please try again.
+                    </span>
+                </div>`;
+        }
+        
+        msgBox.scrollTop = msgBox.scrollHeight;
+    }
+</script>
+
+<style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(5px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+        animation: fadeIn 0.3s ease-out forwards;
+    }
+    @keyframes blob {
+    0% { transform: translate(0px, 0px) scale(1); }
+    33% { transform: translate(30px, -50px) scale(1.1); }
+    66% { transform: translate(-20px, 20px) scale(0.9); }
+    100% { transform: translate(0px, 0px) scale(1); }
+}
+.animate-blob {
+    animation: blob 7s infinite;
+}
+.animation-delay-2000 {
+    animation-delay: 2s;
+}
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(0,0,0,0.1);
+    border-radius: 10px;
+}
+</style>
+{% endif %}
+</body>
+</html>
